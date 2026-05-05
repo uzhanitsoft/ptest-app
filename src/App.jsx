@@ -23,15 +23,27 @@ export default function App() {
 
   // Telegram Mini App — full screen
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
+    try {
+      const tg = window.Telegram?.WebApp;
+      if (!tg) return;
+
       tg.ready();
       tg.expand();
-      tg.setHeaderColor('#09090b');
-      tg.setBackgroundColor('#09090b');
-      if (tg.requestFullscreen) tg.requestFullscreen();
-      if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
-    }
+      try { tg.setHeaderColor('#09090b'); } catch {}
+      try { tg.setBackgroundColor('#09090b'); } catch {}
+      try { tg.disableVerticalSwipes(); } catch {}
+
+      // requestFullscreen requires user gesture — trigger on first tap
+      const goFullscreen = () => {
+        try {
+          if (tg.requestFullscreen) tg.requestFullscreen();
+        } catch {}
+        document.removeEventListener('click', goFullscreen);
+        document.removeEventListener('touchstart', goFullscreen);
+      };
+      document.addEventListener('click', goFullscreen, { once: true });
+      document.addEventListener('touchstart', goFullscreen, { once: true });
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -97,52 +109,51 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="header">
+      {/* Header — offset for TG close button */}
+      <header className="header" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
         <div className="max-w-2xl mx-auto px-4">
-          {/* Top row */}
-          <div className="flex items-center justify-between h-12">
-            <span className="text-sm font-semibold tracking-tight text-zinc-200">
-              PTest
-            </span>
-            {hasData && (
-              <div className="flex items-center gap-1">
-                <button onClick={exportAll}
-                  className="btn btn-ghost !px-2.5 !py-1.5 !text-xs !rounded-lg !border-0">
-                  <Download size={14} />
-                </button>
-                <button onClick={resetAll}
-                  className="btn btn-ghost !px-2.5 !py-1.5 !text-xs !rounded-lg !border-0 hover:!text-red-400">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Tabs */}
-          <div className="flex gap-5">
+          {/* Tabs — centered, large touch targets */}
+          <div className="flex items-center justify-center gap-2 pt-2 pb-1">
             <button onClick={() => setActiveTab('main')}
-              className={`tab ${activeTab === 'main' ? 'active' : ''}`}>
-              <span className="flex items-center gap-1.5">
-                <ClipboardList size={14} />
-                Основной
-                {mc > 0 && <span className="text-[10px] text-zinc-500 font-normal">{mc}</span>}
-              </span>
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                ${activeTab === 'main'
+                  ? 'bg-violet-500/15 text-violet-300 border border-violet-500/25'
+                  : 'text-zinc-500 border border-transparent hover:text-zinc-300'}`}>
+              <ClipboardList size={15} />
+              Основной
+              {mc > 0 && <span className="text-[10px] opacity-60">{mc}</span>}
             </button>
             <button onClick={() => setActiveTab('exceptions')}
-              className={`tab ${activeTab === 'exceptions' ? 'active' : ''}`}>
-              <span className="flex items-center gap-1.5">
-                <AlertTriangle size={14} />
-                Исключения
-                {ec > 0 && <span className="text-[10px] text-amber-500/70 font-normal">{ec}</span>}
-              </span>
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                ${activeTab === 'exceptions'
+                  ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                  : 'text-zinc-500 border border-transparent hover:text-zinc-300'}`}>
+              <AlertTriangle size={15} />
+              Исключения
+              {ec > 0 && <span className="text-[10px] opacity-60">{ec}</span>}
             </button>
           </div>
+
+          {/* Actions row — below tabs, always visible */}
+          {hasData && (
+            <div className="flex items-center justify-center gap-2 pb-2 pt-1">
+              <button onClick={exportAll}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg bg-zinc-800/60 text-zinc-400 border border-zinc-700/40 hover:text-zinc-200 active:scale-95 transition-all">
+                <Download size={13} />
+                Скачать
+              </button>
+              <button onClick={resetAll}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg bg-zinc-800/60 text-zinc-400 border border-zinc-700/40 hover:text-red-400 active:scale-95 transition-all">
+                <Trash2 size={13} />
+                Очистить
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-2xl mx-auto px-4 py-4 sm:py-6">
+      <main className="max-w-2xl mx-auto px-4 py-3 sm:py-6">
         <div className="animate-fade-up">
           {activeTab === 'main' ? (
             mainTests ? (
