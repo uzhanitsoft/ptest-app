@@ -21,6 +21,19 @@ export default function App() {
   const [exceptionTests, setExceptionTests] = useState(null);
   const [toast, setToast] = useState(null);
 
+  // Telegram Mini App — full screen
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor('#09090b');
+      tg.setBackgroundColor('#09090b');
+      if (tg.requestFullscreen) tg.requestFullscreen();
+      if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+    }
+  }, []);
+
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
