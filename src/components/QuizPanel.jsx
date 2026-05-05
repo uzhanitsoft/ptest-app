@@ -1,5 +1,30 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ArrowRightLeft, RotateCcw, Check, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRightLeft, RotateCcw, Check, X, Play } from 'lucide-react';
+
+const SESSION_KEY = 'ptest_session';
+
+function loadSession(tabType) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+    return all[tabType] || null;
+  } catch { return null; }
+}
+
+function saveSession(tabType, data) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+    all[tabType] = data;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function clearSession(tabType) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+    delete all[tabType];
+    localStorage.setItem(SESSION_KEY, JSON.stringify(all));
+  } catch {}
+}
 
 export default function QuizPanel({ tests, onTransfer, transferLabel, transferType, tabName, tabType }) {
   const [idx, setIdx] = useState(0);
@@ -7,6 +32,30 @@ export default function QuizPanel({ tests, onTransfer, transferLabel, transferTy
   const [dir, setDir] = useState('right');
   const [key, setKey] = useState(0);
   const [stats, setStats] = useState({ ok: 0, fail: 0 });
+  const [showResume, setShowResume] = useState(false);
+  const [savedSession, setSavedSession] = useState(null);
+
+  // Check for saved session on mount
+  useEffect(() => {
+    const session = loadSession(tabType);
+    if (session && session.idx > 0 && session.total === tests.length) {
+      setSavedSession(session);
+      setShowResume(true);
+    }
+  }, [tabType, tests.length]);
+
+  // Save session on every progress change
+  useEffect(() => {
+    if (!showResume && idx > 0) {
+      saveSession(tabType, {
+        idx,
+        stats,
+        total: tests.length,
+        questionId: tests[idx]?.id,
+        timestamp: Date.now()
+      });
+    }
+  }, [idx, stats, tabType, tests, showResume]);
 
   const q = tests[idx];
   const total = tests.length;
@@ -61,12 +110,95 @@ export default function QuizPanel({ tests, onTransfer, transferLabel, transferTy
     setSelected(null);
     setStats({ ok: 0, fail: 0 });
     setKey(k => k + 1);
+    clearSession(tabType);
+    setShowResume(false);
+  };
+
+  const handleResume = () => {
+    if (savedSession) {
+      setIdx(savedSession.idx);
+      setStats(savedSession.stats || { ok: 0, fail: 0 });
+      setKey(k => k + 1);
+    }
+    setShowResume(false);
+  };
+
+  const handleStartFresh = () => {
+    setIdx(0);
+    setStats({ ok: 0, fail: 0 });
+    clearSession(tabType);
+    setShowResume(false);
   };
 
   if (!tests?.length) {
     return (
       <div className="surface p-12 text-center animate-fade-up">
         <p className="text-sm text-zinc-500">Нет вопросов</p>
+      </div>
+    );
+  }
+
+  // Resume screen
+  if (showResume && savedSession) {
+    const resumePct = ((savedSession.idx + 1) / savedSession.total * 100).toFixed(0);
+    const timeAgo = getTimeAgo(savedSession.timestamp);
+
+    return (
+      <div className="animate-fade-up space-y-4">
+        <div className="surface p-6 sm:p-8 text-center space-y-5">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-violet-500/10 border border-violet-500/15 flex items-center justify-center">
+            <Play size={24} className="text-violet-400 ml-0.5" />
+          </div>
+
+          <div>
+            <h3 className="text-base font-semibold text-zinc-100 mb-1">
+              Продолжить тестирование?
+            </h3>
+            <p className="text-xs text-zinc-500">
+              {tabName} · {timeAgo}
+            </p>
+          </div>
+
+          {/* Session info */}
+          <div className="flex items-center justify-center gap-4 text-xs text-zinc-400">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+              Вопрос {savedSession.idx + 1} из {savedSession.total}
+            </span>
+            <span>{resumePct}%</span>
+          </div>
+
+          {/* Mini progress */}
+          <div className="progress-track mx-auto max-w-xs">
+            <div className="progress-fill" style={{ width: `${resumePct}%` }} />
+          </div>
+
+          {/* Stats */}
+          {(savedSession.stats?.ok > 0 || savedSession.stats?.fail > 0) && (
+            <div className="flex items-center justify-center gap-4 text-xs">
+              <span className="flex items-center gap-1 text-emerald-500">
+                <Check size={12} strokeWidth={2.5} /> {savedSession.stats.ok}
+              </span>
+              <span className="flex items-center gap-1 text-red-400">
+                <X size={12} strokeWidth={2.5} /> {savedSession.stats.fail}
+              </span>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex flex-col gap-2 pt-2 max-w-xs mx-auto">
+            <button onClick={handleResume}
+              className="btn btn-primary w-full !py-3 !text-sm">
+              <Play size={15} />
+              Продолжить
+            </button>
+            <button onClick={handleStartFresh}
+              className="btn btn-ghost w-full !py-2.5 !text-xs">
+              <RotateCcw size={13} />
+              Начать сначала
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -187,4 +319,16 @@ export default function QuizPanel({ tests, onTransfer, transferLabel, transferTy
       </div>
     </div>
   );
+}
+
+function getTimeAgo(timestamp) {
+  if (!timestamp) return '';
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'только что';
+  if (mins < 60) return `${mins} мин назад`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} ч назад`;
+  const days = Math.floor(hours / 24);
+  return `${days} дн назад`;
 }
